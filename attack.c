@@ -2,13 +2,15 @@
 #include <time.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #define CYCLES_64 uint64_t
 
 
 CYCLES_64 read_timer();
 void busy_fp(double*, double*);
-//void busy_int(int*, int*);
-
+void busy_int(uint64_t*, uint64_t*);
+void idle();
 
 
 double subnormalfp;
@@ -23,10 +25,15 @@ double* normalfpb_ptr = &normalfpb;
 uint64_t* inta_ptr = &inta;
 uint64_t* intb_ptr = &intb;
 
-int main(argc, argv[])
+int main(int argc, char* argv[])
 {
 
+  if(argc<3){
+    printf("please provide 2 argument: <mode> [sub_fp, normal_fp, int, idle]; <number of iterations>\n");
+    exit(1);
+  }
 
+  int loop_num = atoi(argv[2]);
   CYCLES_64 t1, t2;
 
   // buffer to store measured latencies
@@ -38,17 +45,54 @@ int main(argc, argv[])
   const double A_DENORMAL  = *( double* )lnDEN;
   subnormalfp = A_DENORMAL;
   
+  if (strcmp("sub_fp", argv[1])==0){
   
-  
-  
-  
-  for(int j=0; j<BUFF_SIZE; j++){
-    t1 = read_timer();
-    for(int i=0; i<20; i++){
-        busy_fp(subnormalfp_ptr, normalfpa_ptr);
+    for(int j=0; j<BUFF_SIZE; j++){
+        t1 = read_timer();
+        for(int i=0; i<loop_num; i++){
+            busy_fp(subnormalfp_ptr, normalfpa_ptr);
+        }
+        t2 = read_timer();
+        buffer[j] = t2-t1;
     }
-    t2 = read_timer();
-    buffer[j] = t2-t1;
+
+  }else if(strcmp("normal_fp", argv[1])==0){
+  
+    for(int j=0; j<BUFF_SIZE; j++){
+        t1 = read_timer();
+        for(int i=0; i<loop_num; i++){
+            busy_fp(normalfpb_ptr, normalfpa_ptr);
+        }
+        t2 = read_timer();
+        buffer[j] = t2-t1;
+    }
+
+  }else if(strcmp("int", argv[1])==0){
+  
+    for(int j=0; j<BUFF_SIZE; j++){
+        t1 = read_timer();
+        for(int i=0; i<loop_num; i++){
+            busy_int(inta_ptr, intb_ptr);
+        }
+        t2 = read_timer();
+        buffer[j] = t2-t1;
+    }
+  
+  }else if(strcmp("idle", argv[1])==0){
+    
+    for(int j=0; j<BUFF_SIZE; j++){
+        t1 = read_timer();
+        for(int i=0; i<loop_num; i++){
+            idle();
+        }
+        t2 = read_timer();
+        buffer[j] = t2-t1;
+    }
+  
+  }else{
+  
+    printf("please provide 2 argument: <mode> [sub_fp, normal_fp, int, idle]; <number of iterations>\n");
+    exit(1);
   }
 
   // print out results
@@ -100,6 +144,64 @@ inline void busy_fp(double* fpa_ptr, double* fpb_ptr){
               "%xmm9", "%xmm10", "%xmm11",
               "%rax", "%rbx"
         );
+}
+
+
+inline void busy_int(uint64_t* inta_ptr, uint64_t* intb_ptr){
+
+    asm __volatile__(
+            "mov %0, %%rsi\n"
+            "mov %1, %%rdi\n"
+            "mov (%%rsi), %%rbx\n"
+            "mov (%%rdi), %%rcx\n"
+            // MUL — Unsigned Multiply
+            // MUL r/m64
+            // Operand Size Source 1    Source 2    Destination
+            // Quadword     RAX         r/m64       RDX:RAX
+            "mov %%rcx, %%rax\n"
+            "mul %%rbx\n"    // mul_1
+            "mov %%rcx, %%rax\n"
+            "mul %%rbx\n"    // mul_2
+            "mov %%rcx, %%rax\n"
+            "mul %%rbx\n"    // mul_3
+            "mov %%rcx, %%rax\n"
+            "mul %%rbx\n"    // mul_4
+            "mov %%rcx, %%rax\n"
+            "mul %%rbx\n"    // mul_5
+            "mov %%rcx, %%rax\n"
+            "mul %%rbx\n"    // mul_6
+            "mov %%rcx, %%rax\n"
+            "mul %%rbx\n"    // mul_7
+            "mov %%rcx, %%rax\n"
+            "mul %%rbx\n"    // mul_8
+            "mov %%rcx, %%rax\n"
+            "mul %%rbx\n"    // mul_9
+            "mov %%rcx, %%rax\n"
+            "mul %%rbx\n"    // mul_10
+            :
+            : "m"(inta_ptr), "m"(intb_ptr)
+            : "memory",
+              "%rax", "%rbx", "%rcx", "%rdx",
+              "%rsi", "%rdi"
+        );
+}
+
+inline void idle(){
+    asm __volatile__(
+            "mov $0x1234, %%rax\n" // mov_1
+            "mov $0x1234, %%rax\n" // mov_2
+            "mov $0x1234, %%rax\n" // mov_3
+            "mov $0x1234, %%rax\n" // mov_4
+            "mov $0x1234, %%rax\n" // mov_5
+            "mov $0x1234, %%rax\n" // mov_6
+            "mov $0x1234, %%rax\n" // mov_7
+            "mov $0x1234, %%rax\n" // mov_8
+            "mov $0x1234, %%rax\n" // mov_9
+            "mov $0x1234, %%rax\n" // mov_10
+            :
+            :
+            : "%rax"
+            );
 }
 
 
